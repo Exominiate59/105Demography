@@ -1,0 +1,179 @@
+#!/usr/bin/env python3
+
+import argparse
+import sys
+import math
+
+def prog_display(countries, alpha1, beta1, rmsd1, pred1, alpha2, beta2, rmsd2, pred2):
+    i = 1
+    len_countries = len(countries)
+
+    print("Country: ", end='')
+    for country in countries:
+        if (i != len_countries):
+            print(country, ", ", sep='', end='')
+        else:
+            print(country)
+        i += 1
+    print("Fit1")
+    if (alpha1 < 0):
+        print("    Y = %.2f" % (beta1 / 1000000), " X - %.2f" % ((alpha1 * -1) / 1000000), sep='')
+    else:
+        print("    Y = %.2f" % (beta1 / 1000000), " X + %.2f" % ((alpha1 * 1) / 1000000), sep='')
+    print("    Root-mean-square deviation: %.2f" % (rmsd1 / 1000000))
+    print("    Population in 2050: %.2f" % (pred1 / 1000000))
+    print("Fit2")
+    if (alpha2 < 0):
+        print("    X = %.2f" % (beta2 * 1000000), " Y - %.2f" % (alpha2 * -1), sep='')
+    else:
+        print("    X = %.2f" % (beta2 * 1000000), " Y + %.2f" % (alpha2 * 1), sep='')
+    print("    Root-mean-square deviation: %.2f" % (rmsd2 / 1000000))
+    print("    Population in 2050: %.2f" % (pred2 / 1000000))
+    print("Correlation: %.4f" % (rmsd1 / rmsd2))
+
+
+def helpFlag():
+    if len(sys.argv) == 2 and sys.argv[1] == "-h":
+        print("USAGE")
+        print("\t./207demography code [...]")
+        print("\nDESCRIPTION")
+        print("\tn\tcode    country code")
+        sys.exit(0)
+
+def parse_args():
+    try:
+        parser = argparse.ArgumentParser(description='205IQ', usage=helpFlag())
+        parser.add_argument('vars', nargs='*');
+        args = parser.parse_args()
+        return args
+    except:
+        sys.exit(84)
+
+def get_values(splited_line):
+    population = []
+
+    for value in splited_line[2:]:
+        population.append(int(value.split("\n")[0]))
+    return population
+
+def get_dates(dates, splited_line):
+    for date in splited_line[2:]:
+        dates.append(int(date.split("\n")[0]))
+
+def get_mean_values(values, dates):
+    mean = 0
+    res = 0
+    leng = 0
+
+    for k in range(0, len(values)):
+        leng += len(values[k])
+    for i in range(0, len(dates)):
+        for j in range(0, len(values)):
+            mean += values[j][i]
+        res += mean
+        mean = 0
+    return res / len(dates)
+
+def get_a_fit1(mean_dates, mean_values, ref_array):
+    dividend = 0
+    divisor = 0
+
+    for i in range(0, len(ref_array)):
+        dividend += (ref_array[i][1] - mean_values) * (ref_array[i][0] - mean_dates)
+        divisor += (ref_array[i][0] - mean_dates)**2
+    a = dividend / divisor
+    return a
+
+def get_rmsd_fit1(alpha, beta, dates, values):
+    dividend = 0
+    y = 0
+    idx = 0
+
+    for i in range(0, len(dates)):
+        for j in range(0, len(values)):
+            y += values[j][idx]
+        dividend += ((beta * dates[i] + alpha) - y)**2
+        y = 0
+        idx += 1
+    rmsd = math.sqrt(dividend / len(dates))
+    return rmsd
+
+def get_a_fit2(mean_dates, mean_values, ref_array):
+    dividend = 0
+    divisor = 0
+
+    for i in range(0, len(ref_array)):
+        dividend += (ref_array[i][0] - mean_dates) * (ref_array[i][1] - mean_values)
+        divisor += (ref_array[i][1] - mean_values)**2
+    a = dividend / divisor
+    return a
+
+def get_rmsd_fit2(alpha, beta, dates, values):
+    dividend = 0
+    y = 0
+    idx = 0
+
+    for i in range(0, len(dates)):
+        for j in range(0, len(values)):
+            y += values[j][idx]
+        dividend += (((dates[i] - alpha) / beta) - y)**2
+        y = 0
+        idx += 1
+    rmsd = math.sqrt(dividend / len(dates))
+    return rmsd
+
+def sum_pop_vals(ref_array, dates, values):
+    y = 0
+    buf_array = []
+
+    for i in range(0, len(dates)):
+        buf_array.append(dates[i])
+        for j in range(0, len(values)):
+            y += values[j][i]
+        buf_array.append(y)
+        ref_array.append(buf_array)
+        buf_array = []
+        y = 0
+
+def demography(dates, values, countries):
+    mean_dates = sum(dates) / len(dates)
+    mean_values = get_mean_values(values, dates)
+    ref_array = []
+
+    sum_pop_vals(ref_array, dates, values)
+    beta1 = get_a_fit1(mean_dates, mean_values, ref_array)
+    alpha1 = mean_values - beta1 * mean_dates
+    rmsd1 = get_rmsd_fit1(alpha1, beta1, dates, values)
+    pred1 = beta1 * 2050 + alpha1
+
+    beta2 = get_a_fit2(mean_dates, mean_values, ref_array)
+    alpha2 = mean_dates - beta2 * mean_values
+    rmsd2 = get_rmsd_fit2(alpha2, beta2, dates, values)
+    pred2 = (2050 - alpha2) / beta2
+    prog_display(countries, alpha1, beta1, rmsd1, pred1, alpha2, beta2, rmsd2, pred2)
+
+def parse_data(args):
+    countries = []
+    values = []
+    dates = []
+    data = open("105demography_data.csv", "r")
+    lines = data.readlines()
+
+    for line in lines:
+        splited_line = line.split(";")
+        if (splited_line[0] == "Country Name"):
+            get_dates(dates, splited_line)
+        for country in args:
+            if (splited_line[1] == country):
+                values.append(get_values(splited_line))
+                countries.append(splited_line[0])
+                break
+    if not countries:
+        sys.exit(84)
+    demography(dates, values, countries)
+
+def main():
+    args = parse_args()
+    parse_data(args.vars)
+
+main()
